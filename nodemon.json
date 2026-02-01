@@ -1,0 +1,10 @@
+{
+  "watch": [
+    "src"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "test/*"
+  ],
+  "exec": "homebridge -D -U ./test/homebridge"
+}

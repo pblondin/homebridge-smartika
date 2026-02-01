@@ -1,0 +1,71 @@
+{
+  "pluginAlias": "Smartika",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Homebridge plugin for Smartika smart lighting hub with 100% local communication (no cloud required). Supports lights, fans, and smart plugs. Leave Hub IP empty for auto-discovery.",
+  "footerDisplay": "For help and documentation, see the [GitHub repository](https://github.com/pblondin/smartika-homebridge). Use `smartika-cli hub-discover` to find your hub.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "default": "Smartika Hub",
+        "required": true,
+        "description": "The name that will appear in Homebridge logs."
+      },
+      "hubHost": {
+        "title": "Hub IP Address",
+        "type": "string",
+        "format": "ipv4",
+        "placeholder": "10.0.0.122",
+        "description": "IP address of your Smartika hub. Leave empty for auto-discovery (requires UDP port 4156). Recommended to set a static IP or DHCP reservation."
+      },
+      "hubPort": {
+        "title": "Hub Port",
+        "type": "integer",
+        "default": 1234,
+        "minimum": 1,
+        "maximum": 65535,
+        "description": "TCP port for hub communication (default: 1234)."
+      },
+      "pollingInterval": {
+        "title": "Polling Interval (ms)",
+        "type": "integer",
+        "default": 5000,
+        "minimum": 1000,
+        "maximum": 60000,
+        "description": "How often to poll the hub for device status updates (in milliseconds)."
+      },
+      "debug": {
+        "title": "Debug Mode",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable verbose debug logging for troubleshooting connection issues."
+      }
+    },
+    "required": []
+  },
+  "layout": [
+    {
+      "type": "fieldset",
+      "title": "Hub Connection",
+      "expandable": false,
+      "items": [
+        "name",
+        "hubHost",
+        "hubPort"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Advanced Settings",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "pollingInterval",
+        "debug"
+      ]
+    }
+  ]
+}
