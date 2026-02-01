@@ -227,6 +227,15 @@ const commands = {
         ],
         handler: handleGroupDelete,
     },
+
+    // HomeKit Preview
+    'homekit-preview': {
+        category: 'HomeKit',
+        description: 'Preview what accessories would be added to HomeKit',
+        usage: 'homekit-preview',
+        args: [],
+        handler: handleHomekitPreview,
+    },
 };
 
 // ============================================================================
@@ -803,6 +812,166 @@ function handleGroupDelete(args, send) {
     });
 }
 
+function handleHomekitPreview(args, send) {
+    console.log('Analyzing devices and groups for HomeKit...\n');
+    
+    let devices = [];
+    let groupIds = [];
+    const groups = [];
+    const groupedDeviceIds = new Set();
+    let currentGroupIndex = 0;
+    
+    // State machine for sequential requests
+    const processNextStep = (step) => {
+        switch (step) {
+        case 'devices':
+            send(protocol.createDbListDeviceFullRequest(), (packet) => {
+                devices = protocol.parseDbListDeviceFullResponse(packet);
+                processNextStep('groups');
+                return true; // Keep connection open
+            });
+            break;
+            
+        case 'groups':
+            send(protocol.createGroupListRequest(), (packet) => {
+                const result = protocol.parseGroupListResponse(packet);
+                groupIds = result.groupIds;
+                
+                if (groupIds.length === 0) {
+                    displayHomekitPreview(devices, groups, groupedDeviceIds);
+                    return false; // Close connection
+                }
+                
+                currentGroupIndex = 0;
+                processNextStep('read-group');
+                return true; // Keep connection open
+            });
+            break;
+            
+        case 'read-group':
+            if (currentGroupIndex >= groupIds.length) {
+                displayHomekitPreview(devices, groups, groupedDeviceIds);
+                return;
+            }
+            
+            const groupId = groupIds[currentGroupIndex];
+            send(protocol.createGroupReadRequest(groupId), (packet) => {
+                const result = protocol.parseGroupReadResponse(packet);
+                groups.push({ groupId, deviceIds: result.deviceIds });
+                result.deviceIds.forEach(id => groupedDeviceIds.add(id));
+                
+                currentGroupIndex++;
+                
+                if (currentGroupIndex >= groupIds.length) {
+                    displayHomekitPreview(devices, groups, groupedDeviceIds);
+                    return false; // Close connection - done!
+                }
+                
+                // Read next group
+                processNextStep('read-group');
+                return true; // Keep connection open
+            });
+            break;
+        }
+    };
+    
+    // Start the process
+    processNextStep('devices');
+}
+
+function displayHomekitPreview(devices, groups, groupedDeviceIds) {
+    const accessories = [];
+    const skipped = [];
+    
+    // Add groups as accessories
+    for (const group of groups) {
+        accessories.push({
+            type: 'Group',
+            address: formatDeviceId(group.groupId),
+            name: `Group ${group.groupId.toString(16).toUpperCase()}`,
+            members: group.deviceIds.length,
+            category: 'light',
+        });
+    }
+    
+    // Process devices
+    for (const device of devices) {
+        // Skip remotes
+        if (device.category === protocol.DEVICE_CATEGORY.REMOTE) {
+            skipped.push({
+                address: formatDeviceId(device.shortAddress),
+                name: device.typeName,
+                reason: 'Remote control',
+            });
+            continue;
+        }
+        
+        // Skip grouped devices
+        if (groupedDeviceIds.has(device.shortAddress)) {
+            skipped.push({
+                address: formatDeviceId(device.shortAddress),
+                name: device.typeName,
+                reason: 'Part of group',
+            });
+            continue;
+        }
+        
+        // Add standalone device
+        accessories.push({
+            type: 'Device',
+            address: formatDeviceId(device.shortAddress),
+            name: device.typeName,
+            category: device.category,
+        });
+    }
+    
+    // Display results
+    console.log(`${c.bright}═══════════════════════════════════════════════════════════════${c.reset}`);
+    console.log(`${c.bright}                    HomeKit Accessories Preview${c.reset}`);
+    console.log(`${c.bright}═══════════════════════════════════════════════════════════════${c.reset}\n`);
+    
+    console.log(`${c.green}✓ Accessories to Add (${accessories.length})${c.reset}\n`);
+    
+    // Groups first
+    const groupAccessories = accessories.filter(a => a.type === 'Group');
+    if (groupAccessories.length > 0) {
+        console.log(`  ${c.cyan}Groups (${groupAccessories.length}):${c.reset}`);
+        groupAccessories.forEach((a, i) => {
+            console.log(`    ${i + 1}. ${a.address} - ${a.name} (${a.members} members)`);
+        });
+        console.log();
+    }
+    
+    // Standalone devices
+    const deviceAccessories = accessories.filter(a => a.type === 'Device');
+    if (deviceAccessories.length > 0) {
+        console.log(`  ${c.cyan}Standalone Devices (${deviceAccessories.length}):${c.reset}`);
+        deviceAccessories.forEach((a, i) => {
+            console.log(`    ${i + 1}. ${a.address} - ${a.name} [${a.category}]`);
+        });
+        console.log();
+    }
+    
+    // Skipped
+    if (skipped.length > 0) {
+        console.log(`${c.dim}─ Skipped Devices (${skipped.length}) ─${c.reset}\n`);
+        skipped.forEach((s, i) => {
+            console.log(`  ${c.dim}${i + 1}. ${s.address} - ${s.name} (${s.reason})${c.reset}`);
+        });
+        console.log();
+    }
+    
+    // Summary
+    console.log(`${c.bright}───────────────────────────────────────────────────────────────${c.reset}`);
+    console.log(`${c.bright}Summary:${c.reset}`);
+    console.log(`  Total devices in hub:     ${devices.length}`);
+    console.log(`  Groups:                   ${groups.length}`);
+    console.log(`  Devices in groups:        ${groupedDeviceIds.size}`);
+    console.log(`  Skipped (remotes):        ${skipped.filter(s => s.reason === 'Remote control').length}`);
+    console.log(`  ${c.green}HomeKit accessories:    ${accessories.length}${c.reset}`);
+    console.log(`${c.bright}───────────────────────────────────────────────────────────────${c.reset}\n`);
+}
+
 // ============================================================================
 // Output Formatting
 // ============================================================================
@@ -932,8 +1101,10 @@ function connectAndExecute(hubIp, handler, args, needsHubInfo = false) {
                 // Decrypt and handle response
                 const packet = crypto.decrypt(data, encryptionKey);
                 if (responseHandler) {
-                    responseHandler(packet);
-                    client.destroy();
+                    const keepOpen = responseHandler(packet);
+                    if (!keepOpen) {
+                        client.destroy();
+                    }
                 }
             }
         } catch (e) {

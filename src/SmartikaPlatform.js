@@ -298,10 +298,18 @@ class SmartikaPlatform {
      * @param {Array} devices - Array of device status objects
      */
     handleDeviceStatusUpdate(devices) {
+        this.log.debug(`Received status update for ${devices.length} device(s)`);
+        
         for (const status of devices) {
-            // Find the handler for this device
-            const uuid = this.api.hap.uuid.generate(`smartika-${status.shortAddress}`);
-            const handler = this.deviceHandlers.get(uuid);
+            // Try to find handler for regular device
+            let uuid = this.api.hap.uuid.generate(`smartika-${status.shortAddress}`);
+            let handler = this.deviceHandlers.get(uuid);
+
+            // If not found, try as a group (groups use 0xFFxx addresses)
+            if (!handler && status.shortAddress >= 0xFF00) {
+                uuid = this.api.hap.uuid.generate(`smartika-group-${status.shortAddress}`);
+                handler = this.deviceHandlers.get(uuid);
+            }
 
             if (handler) {
                 handler.updateStatus(status);

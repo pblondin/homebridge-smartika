@@ -39,6 +39,7 @@ class SmartikaHubConnection extends EventEmitter {
 
         // Command queue for handling responses
         this.pendingCommand = null;
+        this.commandQueue = [];
         this.responseBuffer = Buffer.alloc(0);
     }
 
@@ -173,16 +174,23 @@ class SmartikaHubConnection extends EventEmitter {
                 this.pendingCommand = null;
                 this.responseBuffer = Buffer.alloc(0);
                 resolve(decrypted);
+                
+                // Process next command in queue
+                this.processNextCommand();
             } catch (error) {
                 this.pendingCommand = null;
                 this.responseBuffer = Buffer.alloc(0);
                 reject(error);
+                
+                // Process next command in queue even after error
+                this.processNextCommand();
             }
         }
     }
 
     /**
      * Send an encrypted command to the hub
+     * Commands are queued and executed sequentially
      * @param {Buffer} request - Protocol request buffer
      * @param {number} timeoutMs - Timeout in milliseconds
      * @returns {Promise<Buffer>} - Decrypted response
@@ -194,26 +202,43 @@ class SmartikaHubConnection extends EventEmitter {
                 return;
             }
 
-            if (this.pendingCommand) {
-                reject(new Error('Another command is pending'));
-                return;
+            // Add to queue
+            this.commandQueue.push({ request, resolve, reject, timeoutMs });
+
+            // Process queue if not already processing
+            if (!this.pendingCommand) {
+                this.processNextCommand();
             }
-
-            this.debugLog(`Request: ${request.toString('hex').toUpperCase()}`);
-
-            const encrypted = crypto.encrypt(request, this.encryptionKey);
-
-            const timeout = setTimeout(() => {
-                this.pendingCommand = null;
-                this.responseBuffer = Buffer.alloc(0);
-                reject(new Error('Command timeout'));
-            }, timeoutMs);
-
-            this.pendingCommand = { resolve, reject, timeout };
-            this.responseBuffer = Buffer.alloc(0);
-
-            this.socket.write(encrypted);
         });
+    }
+
+    /**
+     * Process the next command in the queue
+     */
+    processNextCommand() {
+        if (this.commandQueue.length === 0) {
+            this.pendingCommand = null;
+            return;
+        }
+
+        const { request, resolve, reject, timeoutMs } = this.commandQueue.shift();
+
+        this.debugLog(`Request: ${request.toString('hex').toUpperCase()}`);
+
+        const encrypted = crypto.encrypt(request, this.encryptionKey);
+
+        const timeout = setTimeout(() => {
+            this.pendingCommand = null;
+            this.responseBuffer = Buffer.alloc(0);
+            reject(new Error('Command timeout'));
+            // Process next command even after timeout
+            this.processNextCommand();
+        }, timeoutMs);
+
+        this.pendingCommand = { resolve, reject, timeout };
+        this.responseBuffer = Buffer.alloc(0);
+
+        this.socket.write(encrypted);
     }
 
     /**
@@ -311,10 +336,12 @@ class SmartikaHubConnection extends EventEmitter {
      */
     async pollDeviceStatus() {
         try {
+            this.debugLog('Polling device status...');
             const devices = await this.getDeviceStatus();
+            this.debugLog(`Poll returned ${devices.length} device(s)`);
             this.emit('deviceStatusUpdate', devices);
         } catch (error) {
-            this.debugLog(`Status poll failed: ${error.message}`);
+            this.log.warn(`Status poll failed: ${error.message}`);
         }
     }
 
