@@ -18,9 +18,9 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Homebridge
+# Homebridge runtime data
 persist/
-accessories/
+/accessories/
 
 # Test configuration (contains local settings)
 test/homebridge/
