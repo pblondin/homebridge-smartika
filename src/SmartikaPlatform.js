@@ -169,16 +169,43 @@ class SmartikaPlatform {
             const devices = await this.hub.listDevices();
             this.log.info(`Found ${devices.length} registered device(s)`);
 
-            // Get devices that are members of groups - we'll skip these
-            // Only the group (virtual device) itself should be exposed to HomeKit
-            const groupedDeviceIds = await this.hub.getGroupedDeviceIds();
-            if (groupedDeviceIds.size > 0) {
-                this.log.info(`Found ${groupedDeviceIds.size} device(s) in groups - these will be controlled via their group`);
+            // Get groups and their members
+            const { groups, groupedDeviceIds } = await this.hub.getGroupsWithMembers();
+            if (groups.length > 0) {
+                this.log.info(`Found ${groups.length} group(s) containing ${groupedDeviceIds.size} device(s)`);
             }
 
             // Track which accessories we found
             const foundUUIDs = new Set();
 
+            // First, add groups as accessories (virtual devices)
+            for (const group of groups) {
+                const uuid = this.api.hap.uuid.generate(`smartika-group-${group.groupId}`);
+                foundUUIDs.add(uuid);
+
+                // Create a virtual device object for the group
+                const groupDevice = {
+                    shortAddress: group.groupId,
+                    deviceType: 0x40000001, // Virtual Light (most groups are lights)
+                    typeName: `Group ${group.groupId.toString(16).toUpperCase()}`,
+                    category: protocol.DEVICE_CATEGORY.LIGHT,
+                    isGroup: true,
+                    memberCount: group.deviceIds.length,
+                };
+
+                const existingAccessory = this.accessories.get(uuid);
+
+                if (existingAccessory) {
+                    this.log.info(`Restoring cached group: ${groupDevice.typeName} (${group.deviceIds.length} members)`);
+                    existingAccessory.context.device = groupDevice;
+                    this.setupAccessory(existingAccessory, groupDevice);
+                } else {
+                    this.log.info(`Adding new group: ${groupDevice.typeName} (${group.deviceIds.length} members)`);
+                    this.addAccessory(groupDevice, uuid);
+                }
+            }
+
+            // Then add standalone devices (not in any group)
             for (const device of devices) {
                 // Skip remote controls - they don't need HomeKit accessories
                 if (device.category === protocol.DEVICE_CATEGORY.REMOTE) {

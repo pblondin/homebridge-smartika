@@ -453,7 +453,17 @@ class SmartikaHubConnection extends EventEmitter {
      * @returns {Promise<Set<number>>} - Set of device short addresses that belong to groups
      */
     async getGroupedDeviceIds() {
-        const groupedDevices = new Set();
+        const { groupedDeviceIds } = await this.getGroupsWithMembers();
+        return groupedDeviceIds;
+    }
+
+    /**
+     * Get all groups with their members
+     * @returns {Promise<Object>} - { groups: Array<{groupId, deviceIds}>, groupedDeviceIds: Set<number> }
+     */
+    async getGroupsWithMembers() {
+        const groups = [];
+        const groupedDeviceIds = new Set();
 
         try {
             const { groupIds } = await this.listGroups();
@@ -463,7 +473,9 @@ class SmartikaHubConnection extends EventEmitter {
                 try {
                     const { deviceIds } = await this.readGroup(groupId);
                     this.debugLog(`Group 0x${groupId.toString(16)} has ${deviceIds.length} members: ${deviceIds.map(id => '0x' + id.toString(16)).join(', ')}`);
-                    deviceIds.forEach(id => groupedDevices.add(id));
+                    
+                    groups.push({ groupId, deviceIds });
+                    deviceIds.forEach(id => groupedDeviceIds.add(id));
                 } catch (err) {
                     this.log.warn(`Failed to read group 0x${groupId.toString(16)}: ${err.message}`);
                 }
@@ -472,7 +484,7 @@ class SmartikaHubConnection extends EventEmitter {
             this.log.warn(`Failed to list groups: ${err.message}`);
         }
 
-        return groupedDevices;
+        return { groups, groupedDeviceIds };
     }
 
     /**
