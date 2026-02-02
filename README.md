@@ -9,8 +9,8 @@ A [Homebridge](https://homebridge.io) plugin for **Smartika** (Artika) smart hom
 ## Features
 
 - 🏠 **100% Local Control** — All communication stays on your local network
-- � **Auto-Discovery** — Automatically finds your Smartika hub on the network
-- �💡 **Lights** — On/off, brightness, and color temperature control
+- 🔍 **Auto-Discovery** — Automatically finds your Smartika hub on the network
+- 💡 **Lights** — On/off, brightness, and color temperature control
 - 🌀 **Ceiling Fans** — On/off and speed control
 - 🔌 **Smart Plugs** — On/off control
 - 🔄 **Real-time Updates** — Device status polling keeps HomeKit in sync
