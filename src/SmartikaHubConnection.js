@@ -135,7 +135,7 @@ class SmartikaHubConnection extends EventEmitter {
                     this.hubId = result.hubId;
                     this.encryptionKey = crypto.generateKey(result.hubId);
                     this.debugLog(`Hub ID: ${result.hubIdHex}`);
-                    this.debugLog(`Encryption key generated`);
+                    this.debugLog('Encryption key generated');
                     resolve();
                 } catch (error) {
                     reject(error);

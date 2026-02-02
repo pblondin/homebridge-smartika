@@ -76,6 +76,7 @@ class SmartikaDiscovery extends EventEmitter {
      */
     handleMessage(msg, rinfo) {
         // Remove null bytes and trim whitespace
+        // eslint-disable-next-line no-control-regex
         const message = msg.toString('utf-8').replace(/\x00/g, '').trim();
 
         // Parse "SMARTIKA HUB - {ID}" or "SMARTIKA HUB - BOOTLOADER - {ID}"
@@ -120,7 +121,7 @@ class SmartikaDiscovery extends EventEmitter {
         if (this.server) {
             try {
                 this.server.close();
-            } catch (e) {
+            } catch {
                 // Ignore close errors
             }
             this.server = null;
@@ -129,9 +130,9 @@ class SmartikaDiscovery extends EventEmitter {
 
     /**
      * Start continuous discovery (for background hub monitoring)
-     * @param {number} interval - Check interval in ms (default: 30000)
+     * @param {number} _interval - Check interval in ms (default: 30000)
      */
-    startContinuousDiscovery(interval = 30000) {
+    startContinuousDiscovery(_interval = 30000) {
         if (this.continuousServer) {
             return;
         }
@@ -164,7 +165,7 @@ class SmartikaDiscovery extends EventEmitter {
         if (this.continuousServer) {
             try {
                 this.continuousServer.close();
-            } catch (e) {
+            } catch {
                 // Ignore close errors
             }
             this.continuousServer = null;
