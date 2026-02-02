@@ -26,6 +26,13 @@
     "local-control"
   ],
   "main": "src/index.js",
+  "files": [
+    "src/",
+    "tools/",
+    "config.schema.json",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": "^18.20.4 || ^20.16.0 || ^22.5.1",
     "homebridge": "^1.8.0 || ^2.0.0-beta.0"

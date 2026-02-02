@@ -1,0 +1,14 @@
+# Development files
+test/
+.git/
+.gitignore
+.DS_Store
+nodemon.json
+
+# Documentation that doesn't need to be in NPM package
+Plans/
+
+# Keep config.schema.json as it's needed for Homebridge UI
+# Keep tools/ as it contains the CLI
+# Keep src/ as it contains the plugin code
+# Keep README.md, LICENSE, package.json (automatically included)
