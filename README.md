@@ -6,10 +6,6 @@
 
 A [Homebridge](https://homebridge.io) plugin for **Smartika** (Artika) smart home devices with **100% local control** — no cloud required!
 
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/placeholder/smartika-homekit.png" alt="Smartika devices in Apple Home" width="600">
-</p>
-
 ## Features
 
 - 🏠 **100% Local Control** — All communication stays on your local network
