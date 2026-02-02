@@ -11,7 +11,6 @@
         "title": "Platform Name",
         "type": "string",
         "default": "Smartika Hub",
-        "required": true,
         "description": "The name that will appear in Homebridge logs."
       },
       "hubHost": {
@@ -44,7 +43,7 @@
         "description": "Enable verbose debug logging for troubleshooting connection issues."
       }
     },
-    "required": []
+    "required": ["name"]
   },
   "layout": [
     {
