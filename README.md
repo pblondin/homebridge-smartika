@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/homebridge-smartika.svg)](https://www.npmjs.com/package/homebridge-smartika)
 [![npm](https://img.shields.io/npm/dt/homebridge-smartika.svg)](https://www.npmjs.com/package/homebridge-smartika)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![verified-by-homebridge](https://img.shields.io/badge/homebridge-verified-blueviolet?color=%23491F59&style=flat)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 
 A [Homebridge](https://homebridge.io) plugin for **Smartika** (Artika) smart home devices with **100% local control** — no cloud required!
 
