@@ -167,6 +167,12 @@ smartika-cli 10.0.0.122 list
 
 # Get firmware version
 smartika-cli 10.0.0.122 firmware
+
+# Preview what devices will appear in HomeKit
+smartika-cli 10.0.0.122 homekit-preview
+
+# Interactive pairing wizard for new devices
+smartika-cli 10.0.0.122 pair
 ```
 
 ### Available Commands
@@ -194,6 +200,8 @@ smartika-cli 10.0.0.122 firmware
 |                   | `group-create` | Create a new group                        |
 |                   | `group-update` | Update group members                      |
 |                   | `group-delete` | Delete group(s)                           |
+| **HomeKit**       | `homekit-preview` | Preview HomeKit accessories            |
+| **Pairing**       | `pair`         | Interactive wizard to pair new devices    |
 
 ## Troubleshooting
 
@@ -228,12 +236,20 @@ smartika-cli 10.0.0.122 firmware
    ```bash
    smartika-cli 10.0.0.122 list
    ```
-2. **Discover and add devices** — If devices are missing:
+2. **Pair new devices** — Use the interactive pairing wizard:
+   ```bash
+   smartika-cli 10.0.0.122 pair
+   ```
+   Or manually discover and add:
    ```bash
    smartika-cli 10.0.0.122 discover
    smartika-cli 10.0.0.122 db-add 0x28cf
    ```
-3. **Restart Homebridge** — After adding devices, restart Homebridge to re-discover
+3. **Preview HomeKit accessories** — Check what will appear in HomeKit:
+   ```bash
+   smartika-cli 10.0.0.122 homekit-preview
+   ```
+4. **Restart Homebridge** — After adding devices, restart Homebridge to re-discover
 
 ### Status Not Updating
 

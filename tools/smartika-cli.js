@@ -9,6 +9,7 @@
 
 const net = require('net');
 const dgram = require('dgram');
+const readline = require('readline');
 const crypto = require('../src/SmartikaCrypto');
 const protocol = require('../src/SmartikaProtocol');
 
@@ -235,6 +236,17 @@ const commands = {
         usage: 'homekit-preview',
         args: [],
         handler: handleHomekitPreview,
+    },
+
+    // Pairing Wizard
+    'pair': {
+        category: 'Pairing',
+        description: 'Interactive wizard to pair new devices',
+        usage: 'pair [duration]',
+        args: [
+            { name: 'duration', type: 'number', required: false, default: 60, description: 'Pairing window duration in seconds (default: 60)' },
+        ],
+        handler: handlePairWizard,
     },
 };
 
@@ -970,6 +982,208 @@ function displayHomekitPreview(devices, groups, groupedDeviceIds) {
     console.log(`  Skipped (remotes):        ${skipped.filter(s => s.reason === 'Remote control').length}`);
     console.log(`  ${c.green}HomeKit accessories:    ${accessories.length}${c.reset}`);
     console.log(`${c.bright}───────────────────────────────────────────────────────────────${c.reset}\n`);
+}
+
+// ============================================================================
+// Pairing Wizard
+// ============================================================================
+
+/**
+ * Create a readline interface for user input
+ */
+function createReadlineInterface() {
+    return readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+}
+
+/**
+ * Prompt user for input
+ */
+function prompt(rl, question) {
+    return new Promise((resolve) => {
+        rl.question(question, (answer) => {
+            resolve(answer.trim());
+        });
+    });
+}
+
+/**
+ * Interactive pairing wizard
+ */
+function handlePairWizard(args, send) {
+    const duration = args.duration || 60;
+    
+    console.log(`\n${c.bright}═══════════════════════════════════════════════════════════════${c.reset}`);
+    console.log(`${c.bright}                    Smartika Device Pairing Wizard${c.reset}`);
+    console.log(`${c.bright}═══════════════════════════════════════════════════════════════${c.reset}\n`);
+    
+    console.log(`${c.cyan}This wizard will help you pair new devices to your Smartika hub.${c.reset}\n`);
+    console.log('Steps:');
+    console.log('  1. Enable pairing mode on the hub');
+    console.log('  2. Put your device into pairing mode (usually hold button 5+ seconds)');
+    console.log('  3. Wait for the device to be discovered');
+    console.log('  4. Add the device to the hub database\n');
+    
+    const rl = createReadlineInterface();
+    
+    // State
+    let registeredDevices = new Set();
+    let discoveredDevices = [];
+    let newDevices = [];
+    
+    // Step 1: Get currently registered devices
+    console.log(`${c.dim}Getting current device list...${c.reset}`);
+    
+    send(protocol.createDbListDeviceFullRequest(), (packet) => {
+        const devices = protocol.parseDbListDeviceFullResponse(packet);
+        devices.forEach(d => registeredDevices.add(d.shortAddress));
+        console.log(`${c.dim}Found ${devices.length} registered device(s)${c.reset}\n`);
+        
+        // Step 2: Enable pairing mode
+        console.log(`${c.yellow}► Enabling pairing mode for ${duration} seconds...${c.reset}`);
+        
+        send(protocol.createJoinEnableRequest(duration), (packet2) => {
+            const result = protocol.parseJoinEnableResponse(packet2);
+            console.log(`${c.green}✓ Pairing mode enabled${c.reset}\n`);
+            console.log(`${c.bright}Put your device into pairing mode now!${c.reset}`);
+            console.log(`${c.dim}(Press Enter to scan for new devices, or wait for the timer)${c.reset}\n`);
+            
+            // Create countdown timer
+            let remaining = duration;
+            const countdownTimer = setInterval(() => {
+                remaining--;
+                process.stdout.write(`\r${c.dim}Time remaining: ${remaining}s  ${c.reset}`);
+                
+                if (remaining <= 0) {
+                    clearInterval(countdownTimer);
+                    process.stdout.write('\r                              \r');
+                    finishPairing();
+                }
+            }, 1000);
+            
+            // Allow user to press Enter to scan early
+            rl.once('line', () => {
+                clearInterval(countdownTimer);
+                process.stdout.write('\r                              \r');
+                scanForDevices();
+            });
+            
+            function scanForDevices() {
+                console.log(`\n${c.yellow}► Scanning for new devices...${c.reset}`);
+                
+                send(protocol.createDeviceDiscoveryRequest(), (packet3) => {
+                    discoveredDevices = protocol.parseDeviceDiscoveryResponse(packet3);
+                    
+                    // Find devices not in the registered list
+                    newDevices = discoveredDevices.filter(d => !registeredDevices.has(d.shortAddress));
+                    
+                    if (newDevices.length === 0) {
+                        console.log(`\n${c.yellow}No new devices found.${c.reset}`);
+                        console.log('Make sure your device is in pairing mode and try again.\n');
+                        
+                        prompt(rl, `${c.cyan}Scan again? (y/n): ${c.reset}`).then((answer) => {
+                            if (answer.toLowerCase() === 'y') {
+                                scanForDevices();
+                            } else {
+                                finishPairing();
+                            }
+                        });
+                    } else {
+                        console.log(`\n${c.green}✓ Found ${newDevices.length} new device(s)!${c.reset}\n`);
+                        
+                        newDevices.forEach((device, index) => {
+                            console.log(`  ${c.bright}[${index + 1}]${c.reset} ${formatDeviceId(device.shortAddress)} - ${device.typeName} [${device.category}]`);
+                        });
+                        console.log();
+                        
+                        promptAddDevices();
+                    }
+                    
+                    return true; // Keep connection open
+                });
+            }
+            
+            function promptAddDevices() {
+                prompt(rl, `${c.cyan}Add these devices to the hub? (y/n/numbers e.g. "1,3"): ${c.reset}`).then((answer) => {
+                    const lowerAnswer = answer.toLowerCase();
+                    
+                    if (lowerAnswer === 'n') {
+                        finishPairing();
+                        return;
+                    }
+                    
+                    let devicesToAdd = [];
+                    
+                    if (lowerAnswer === 'y' || lowerAnswer === 'all') {
+                        devicesToAdd = newDevices;
+                    } else {
+                        // Parse device numbers
+                        const nums = answer.split(/[,\s]+/).map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+                        devicesToAdd = nums.map(n => newDevices[n - 1]).filter(d => d);
+                    }
+                    
+                    if (devicesToAdd.length === 0) {
+                        console.log(`${c.yellow}No valid devices selected.${c.reset}`);
+                        promptAddDevices();
+                        return;
+                    }
+                    
+                    const deviceIds = devicesToAdd.map(d => d.shortAddress);
+                    console.log(`\n${c.yellow}► Adding ${deviceIds.length} device(s) to hub database...${c.reset}`);
+                    
+                    send(protocol.createDbAddDeviceRequest(deviceIds), (packet4) => {
+                        const result = protocol.parseDbAddDeviceResponse(packet4);
+                        
+                        if (result.errorIds.length === 0) {
+                            console.log(`${c.green}✓ All devices added successfully!${c.reset}\n`);
+                        } else {
+                            console.log(`${c.yellow}⚠ Some devices failed to add${c.reset}`);
+                            console.log(`  Failed: ${result.errorIds.map(formatDeviceId).join(', ')}\n`);
+                        }
+                        
+                        // Ask about scanning for more
+                        prompt(rl, `${c.cyan}Scan for more devices? (y/n): ${c.reset}`).then((answer) => {
+                            if (answer.toLowerCase() === 'y') {
+                                // Update registered list
+                                deviceIds.forEach(id => registeredDevices.add(id));
+                                scanForDevices();
+                            } else {
+                                finishPairing();
+                            }
+                        });
+                        
+                        return true; // Keep connection open
+                    });
+                });
+            }
+            
+            function finishPairing() {
+                console.log(`\n${c.yellow}► Disabling pairing mode...${c.reset}`);
+                
+                send(protocol.createJoinDisableRequest(), (packet) => {
+                    console.log(`${c.green}✓ Pairing mode disabled${c.reset}\n`);
+                    
+                    console.log(`${c.bright}═══════════════════════════════════════════════════════════════${c.reset}`);
+                    console.log(`${c.bright}                       Pairing Complete!${c.reset}`);
+                    console.log(`${c.bright}═══════════════════════════════════════════════════════════════${c.reset}\n`);
+                    
+                    console.log('Next steps:');
+                    console.log('  • Restart Homebridge to discover new devices');
+                    console.log('  • Use `groups` command to organize devices into groups');
+                    console.log('  • Use `status` command to verify device connectivity\n');
+                    
+                    rl.close();
+                    return false; // Close connection
+                });
+            }
+            
+            return true; // Keep connection open
+        });
+        
+        return true; // Keep connection open
+    });
 }
 
 // ============================================================================
