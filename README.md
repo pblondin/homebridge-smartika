@@ -29,7 +29,7 @@ A [Homebridge](https://homebridge.io) plugin for **Smartika** (Artika) smart hom
 ## Requirements
 
 - [Homebridge](https://homebridge.io) v1.8.0 or later
-- Node.js v18.20.4, v20.16.0, or v22.5.1+
+- Node.js v18.0.0+
 - Smartika Hub on your local network
 
 ## Installation
