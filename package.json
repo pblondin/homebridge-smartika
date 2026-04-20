@@ -2,7 +2,7 @@
   "name": "homebridge-smartika",
   "displayName": "Homebridge Smartika",
   "description": "Homebridge plugin for Smartika smart lighting hub with 100% local control (no cloud required). Supports lights, fans, and smart plugs.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "license": "MIT",
   "author": "Philippe Blondin",
   "repository": {

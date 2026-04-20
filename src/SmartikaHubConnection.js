@@ -175,7 +175,7 @@ class SmartikaHubConnection extends EventEmitter {
             try {
                 // Decrypt the response
                 const decrypted = crypto.decrypt(this.responseBuffer, this.encryptionKey);
-                this.debugLog(`Response: ${decrypted.toString('hex').toUpperCase()}`);
+                this.debugLog(`Response (${decrypted.length}B): ${decrypted.toString('hex').toUpperCase()}`);
 
                 this.pendingCommand = null;
                 this.responseBuffer = Buffer.alloc(0);
@@ -184,6 +184,7 @@ class SmartikaHubConnection extends EventEmitter {
                 // Process next command in queue
                 this.processNextCommand();
             } catch (error) {
+                this.log.warn(`Decrypt failed (${this.responseBuffer.length}B buffer): ${error.message}`);
                 this.pendingCommand = null;
                 this.responseBuffer = Buffer.alloc(0);
                 reject(error);
@@ -234,6 +235,7 @@ class SmartikaHubConnection extends EventEmitter {
         const encrypted = crypto.encrypt(request, this.encryptionKey);
 
         const timeout = setTimeout(() => {
+            this.log.warn(`Command timeout after ${timeoutMs}ms (${this.commandQueue.length} remaining in queue)`);
             this.pendingCommand = null;
             this.responseBuffer = Buffer.alloc(0);
             reject(new Error('Command timeout'));
@@ -342,9 +344,18 @@ class SmartikaHubConnection extends EventEmitter {
      */
     async pollDeviceStatus() {
         try {
-            this.debugLog('Polling device status...');
             const devices = await this.getDeviceStatus();
-            this.debugLog(`Poll returned ${devices.length} device(s)`);
+            if (this.debug) {
+                const summary = devices.map(d => {
+                    const addr = `0x${d.shortAddress.toString(16).toUpperCase()}`;
+                    const parts = [d.typeName, addr];
+                    if (d.on !== undefined) parts.push(d.on ? 'ON' : 'OFF');
+                    if (d.brightness !== undefined) parts.push(`${Math.round(d.brightness / 255 * 100)}%`);
+                    if (d.speed !== undefined) parts.push(`speed=${d.speed}`);
+                    return parts.join(' ');
+                }).join(' | ');
+                this.debugLog(`Poll (${devices.length} devices): ${summary}`);
+            }
             this.emit('deviceStatusUpdate', devices);
         } catch (error) {
             this.log.warn(`Status poll failed: ${error.message}`);
@@ -408,8 +419,16 @@ class SmartikaHubConnection extends EventEmitter {
      * @returns {Promise<Object>}
      */
     async setDevicePower(on, deviceIds) {
-        const response = await this.sendCommand(protocol.createDeviceSwitchRequest(on, deviceIds));
-        return protocol.parseDeviceSwitchResponse(response);
+        const label = `Power ${on ? 'ON' : 'OFF'} → [${this.formatAddrs(deviceIds)}]`;
+        try {
+            const response = await this.sendCommand(protocol.createDeviceSwitchRequest(on, deviceIds));
+            const result = protocol.parseDeviceSwitchResponse(response);
+            this.log.info(`${label} OK`);
+            return result;
+        } catch (error) {
+            this.log.warn(`${label} FAILED: ${error.message}`);
+            throw error;
+        }
     }
 
     /**
@@ -419,8 +438,17 @@ class SmartikaHubConnection extends EventEmitter {
      * @returns {Promise<Object>}
      */
     async setLightBrightness(brightness, deviceIds) {
-        const response = await this.sendCommand(protocol.createLightDimRequest(brightness, deviceIds));
-        return protocol.parseLightDimResponse(response);
+        const pct = Math.round(brightness / 255 * 100);
+        const label = `Brightness ${pct}% → [${this.formatAddrs(deviceIds)}]`;
+        try {
+            const response = await this.sendCommand(protocol.createLightDimRequest(brightness, deviceIds));
+            const result = protocol.parseLightDimResponse(response);
+            this.log.info(`${label} OK`);
+            return result;
+        } catch (error) {
+            this.log.warn(`${label} FAILED: ${error.message}`);
+            throw error;
+        }
     }
 
     /**
@@ -430,8 +458,16 @@ class SmartikaHubConnection extends EventEmitter {
      * @returns {Promise<Object>}
      */
     async setLightTemperature(temperature, deviceIds) {
-        const response = await this.sendCommand(protocol.createLightTemperatureRequest(temperature, deviceIds));
-        return protocol.parseLightTemperatureResponse(response);
+        const label = `Temperature ${temperature} → [${this.formatAddrs(deviceIds)}]`;
+        try {
+            const response = await this.sendCommand(protocol.createLightTemperatureRequest(temperature, deviceIds));
+            const result = protocol.parseLightTemperatureResponse(response);
+            this.log.info(`${label} OK`);
+            return result;
+        } catch (error) {
+            this.log.warn(`${label} FAILED: ${error.message}`);
+            throw error;
+        }
     }
 
     /**
@@ -441,7 +477,14 @@ class SmartikaHubConnection extends EventEmitter {
      * @returns {Promise<void>}
      */
     async setFanSpeed(speed, deviceIds) {
-        await this.sendCommand(protocol.createFanControlRequest(speed, deviceIds));
+        const label = `Fan speed ${speed} → [${this.formatAddrs(deviceIds)}]`;
+        try {
+            await this.sendCommand(protocol.createFanControlRequest(speed, deviceIds));
+            this.log.info(`${label} OK`);
+        } catch (error) {
+            this.log.warn(`${label} FAILED: ${error.message}`);
+            throw error;
+        }
     }
 
     /**
@@ -524,6 +567,10 @@ class SmartikaHubConnection extends EventEmitter {
      * Debug logging helper
      * @param {string} message
      */
+    formatAddrs(deviceIds) {
+        return deviceIds.map(id => `0x${id.toString(16).toUpperCase()}`).join(', ');
+    }
+
     debugLog(message) {
         if (this.debug) {
             this.log.debug(`[Hub] ${message}`);
