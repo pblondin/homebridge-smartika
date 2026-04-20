@@ -2,7 +2,7 @@
   "name": "homebridge-smartika",
   "displayName": "Homebridge Smartika",
   "description": "Homebridge plugin for Smartika smart lighting hub with 100% local control (no cloud required). Supports lights, fans, and smart plugs.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "MIT",
   "author": "Philippe Blondin",
   "repository": {
@@ -42,6 +42,7 @@
     "cli": "node tools/smartika-cli.js",
     "test": "node test/test-protocol.js",
     "test:crypto": "node test/test-crypto.js",
+    "test:hub": "node test/test-hub-connection.js",
     "lint": "eslint src/",
     "watch": "nodemon",
     "prepublishOnly": "npm run lint"

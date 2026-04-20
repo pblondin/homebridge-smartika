@@ -161,6 +161,12 @@ class SmartikaHubConnection extends EventEmitter {
         // Append to buffer
         this.responseBuffer = Buffer.concat([this.responseBuffer, data]);
 
+        // AES-128-CBC requires data in 16-byte blocks. If the buffer isn't a
+        // multiple of 16, the response hasn't fully arrived yet — wait for more.
+        if (this.responseBuffer.length % 16 !== 0) {
+            return;
+        }
+
         // Try to process complete packets
         if (this.pendingCommand && this.responseBuffer.length > 0) {
             const { resolve, reject, timeout } = this.pendingCommand;
